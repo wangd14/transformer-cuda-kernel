@@ -9,7 +9,7 @@ __global__ void softmax_naive_kernel(
     int rows,
     int cols)
 {
-    int row = blockIdx.x + blockDim.x + threadIdx.x;
+    int row = blockIdx.x;
 
     if (row >= rows) {
         return;
@@ -18,7 +18,7 @@ __global__ void softmax_naive_kernel(
     //Pass 1: Max value in row
     float row_max = -FLT_MAX;
     for (int i = 0; i < cols; ++i) {
-        row_max = fmaxf(row_max, input[row * cols + i])
+        row_max = fmaxf(row_max, input[row * cols + i]);
     }
 
     //Pass 2: Sum of Expotentials (normalization factor)
@@ -47,7 +47,7 @@ __global__ void softmax_fused_kernel(
 
     // Shared memory declaration
     // Declared as external array so size can be dynamically set
-    extern __shared__ float smem;
+    extern __shared__ float smem[];
 
     float local_max = -FLT_MAX;
     float local_sum = 0.0f;
@@ -66,7 +66,7 @@ __global__ void softmax_fused_kernel(
         }
         __syncthreads();
     }
-    const float row_max = smem;
+    const float row_max = smem[0];
 
     for (int i = tId; i < cols; i += blockDim.x) {
         local_sum += expf(input[row * cols + i] - row_max);
@@ -80,7 +80,7 @@ __global__ void softmax_fused_kernel(
         }
         __syncthreads();
     }
-    const float row_sum = smem;
+    const float row_sum = smem[0];
 
     for (int i = tId; i < cols; i += blockDim.x) {
         output[row * cols + i] = expf(input[row * cols + i] - row_max) / row_sum;
@@ -99,13 +99,13 @@ __device__ __forceinline__ float warp_reduce_max(float val) {
 
 __device__ __forceinline__ float warp_reduce_sum(float val) {
     for (int offset = 16; offset > 0; offset /= 2) {
-        val = += __shfl_down_sync(0xFFFFFFFF, val, offset);
+        val += __shfl_down_sync(0xFFFFFFFF, val, offset);
     }
     return val;
 }
 
 __global__ void softmax_warp_optimized_kernel(
-    const float* input
+    const float* input,
     float* output,
     int rows,
     int cols
@@ -116,7 +116,7 @@ __global__ void softmax_warp_optimized_kernel(
     int warp_id = tId / 32; // Warp's index within its block (0-15 for a 512-thread block)
 
     // Shared memory for the final reduction step between warps.
-    extern __shared__ float smem;
+    extern __shared__ float smem[];
 
     float local_max = -FLT_MAX;
     for (int i = tId; i < cols; i += blockDim.x) {
@@ -137,11 +137,11 @@ __global__ void softmax_warp_optimized_kernel(
     }
 
     if (tId == 0) {
-        smem = final_max;
+        smem[0] = final_max;
     }
 
     __syncthreads();
-    const float row_max = smem;
+    const float row_max = smem[0];
 
     float local_sum = 0.0f;
     for (int i = tId; i < cols; i += blockDim.x) {
@@ -151,7 +151,7 @@ __global__ void softmax_warp_optimized_kernel(
     float warp_sum = warp_reduce_sum(local_sum);
 
     if (lane_id == 0) {
-        smem[warp_id] = warp_max;
+        smem[warp_id] = warp_sum;
     }
 
     __syncthreads();
@@ -162,11 +162,11 @@ __global__ void softmax_warp_optimized_kernel(
     }
 
     if (tId == 0) {
-        smem = final_sum;
+        smem[0] = final_sum;
     }
 
     __syncthreads();
-    const float row_sum = smem;
+    const float row_sum = smem[0];
 
     for (int i =tId; i< cols; i += blockDim.x) {
         output[row * cols + i] = expf(input[row * cols + i] - row_max) / row_sum;
@@ -183,8 +183,8 @@ void softmax_naive_cuda_launcher(
     int cols = input.size(1);
 
     //One thread per row
-    const int threads_per_block = 256;
-    const int num_blocks = (rows + threads_per_block - 1) / threads_per_block;
+    const int threads_per_block = 1;
+    const int num_blocks = rows;
 
     softmax_naive_kernel<<<num_blocks, threads_per_block>>>(
         input.data_ptr<float>(),

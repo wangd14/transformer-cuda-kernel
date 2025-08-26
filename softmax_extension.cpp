@@ -17,7 +17,7 @@ void softmax_warp_optimized_cuda_launcher(
 torch::Tensor softmax_naive_forward(torch::Tensor input) {
     //Input validation
     TORCH_CHECK(input.is_cuda(), "Input tensor must be CUDA tensor");
-    TORCH_CHECK(input.is_continguous(), "Input tensor must be contiguous");
+    TORCH_CHECK(input.is_contiguous(), "Input tensor must be contiguous");
     TORCH_CHECK(input.scalar_type() == torch::kFloat32, "Input tensor must be of type float32");
 
     auto output = torch::empty_like(input);
@@ -30,7 +30,7 @@ torch::Tensor softmax_naive_forward(torch::Tensor input) {
 torch::Tensor softmax_fused_forward(torch::Tensor input) {
     //Input validation
     TORCH_CHECK(input.is_cuda(), "Input tensor must be CUDA tensor");
-    TORCH_CHECK(input.is_continguous(), "Input tensor must be contiguous");
+    TORCH_CHECK(input.is_contiguous(), "Input tensor must be contiguous");
     TORCH_CHECK(input.scalar_type() == torch::kFloat32, "Input tensor must be of type float32");
 
     auto output = torch::empty_like(input);
@@ -43,7 +43,7 @@ torch::Tensor softmax_fused_forward(torch::Tensor input) {
 torch::Tensor softmax_warp_optimized_foward(torch::Tensor input) {
     //Input validation
     TORCH_CHECK(input.is_cuda(), "Input tensor must be CUDA tensor");
-    TORCH_CHECK(input.is_continguous(), "Input tensor must be contiguous");
+    TORCH_CHECK(input.is_contiguous(), "Input tensor must be contiguous");
     TORCH_CHECK(input.scalar_type() == torch::kFloat32, "Input tensor must be of type float32");
 
     auto output = torch::empty_like(input);
